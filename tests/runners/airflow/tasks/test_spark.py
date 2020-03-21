@@ -53,25 +53,16 @@ class TestSparkTask(TestCase):
                 'deploy_mode': 'standalone',
                 'class': '.class',
                 'conf': {
-                    'spark.sql.parquet.writeLegacyFormat': 'true',
-                    'spark.driver.cores': 3
-                }
-            },
-            'application_arguments': {
-                'ni-main-class': 'main_class',
-                'ni-application-id': 'application_id',
-                'env': 'env',
-                'cloudwatch-reporting-enabled': '',
-                'audit-reporting-enabled': '',
-            },
-            'stack_id': 'cloudformation_emr_id',
+                    'stack_id': 'cloudformation_emr_id',
 
-            'resources': {
-                'cloudformation_emr_id': {
-                    'cluster_type': 'emr',
-                    'parameters': {
-                        'aws_conn_id': 'aws_ni',
-                        'cluster_states': ['RUNNING', 'WAITING']
+                    'resources': {
+                        'cloudformation_emr_id': {
+                            'cluster_type': 'emr',
+                            'parameters': {
+                                'aws_conn_id': 'aws_ni',
+                                'cluster_states': ['RUNNING', 'WAITING']
+                            }
+                        }
                     }
                 }
             }

@@ -19,7 +19,10 @@ from flatdict import FlatDict
 from rainbow.runners.airflow.tasks.clusters.cluster import ClusterTask
 
 from rainbow.core.util import class_util, rainbow_util
+
+from rainbow.core.util import class_util
 from rainbow.runners.airflow.model import task
+from rainbow.runners.airflow.tasks.resources.resource import ResourceTask
 
 
 class SparkTask(task.Task):
@@ -42,6 +45,17 @@ class SparkTask(task.Task):
             self.spark_submit)
 
         return cluster_task.apply_task_to_dag()
+        self.spark_submit = self.__generate_spark_submit()
+
+    def apply_task_to_dag(self):
+        resource_config = self.config['resource']
+
+        resource_config.get('parameters', {})['task'] = self.task_name
+        resource_task = self.__get_resource_task(resource_config['type'])(
+            self.dag, self.pipeline_name, self.parent, resource_config['parameters'], self.trigger_rule,
+            self.spark_submit)
+
+        return resource_task.apply_task_to_dag()
 
     def __generate_spark_submit(self):
         spark_submit = ['spark-submit']
@@ -60,6 +74,9 @@ class SparkTask(task.Task):
         clusters_package = 'rainbow/runners/airflow/tasks/clusters'
         return class_util.get_class_instance([clusters_package, 'TODO'], ClusterTask,
                                              cluster_task_type)
+    def __get_resource_task(cls, resource_task_type):
+        resource_task_package = 'rainbow/runners/airflow/tasks/resources'
+        return class_util.get_class_instance([resource_task_package, 'TODO'], ResourceTask, resource_task_type)
 
     @classmethod
     def __spark_args(cls, params: dict):
@@ -79,3 +96,22 @@ class SparkTask(task.Task):
     @classmethod
     def __additional_arguments(cls, params: dict):
         return rainbow_util.from_dict_to_list(rainbow_util.reformat_dict_keys(params, "--{}"))
+        params['conf'] = ', '.join(['{}={}'.format(k, v) for (k, v) in FlatDict(params['conf']).items()])
+        return cls.__from_dict_to_list(cls.__reformat_dict_keys(params))
+
+    @classmethod
+    def __additional_arguments(cls, params: dict):
+        return cls.__from_dict_to_list(cls.__reformat_dict_keys(params))
+
+    @classmethod
+    def __reformat_dict_keys(cls, params):
+        return {"--{}".format(x): y for (x, y) in FlatDict(params).items()}
+
+    @classmethod
+    def __from_dict_to_list(cls, dictionary):
+        steps = []
+        for k, v in dictionary.items():
+            steps.append(k)
+            steps.append(v)
+
+        return steps
