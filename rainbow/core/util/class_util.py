@@ -51,6 +51,10 @@ def find_subclasses_in_packages(packages, parent_class):
     return classes
 
 
+def get_class_instance(packages, parent_class, class_type):
+    return find_subclasses_in_packages(packages, parent_class)[class_type]
+
+
 def __get_class(the_module, the_class):
     m = __import__(the_module)
     for comp in the_module.split('.')[1:] + [the_class]:
