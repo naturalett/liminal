@@ -6,3 +6,4 @@ venv
 .Python
 *.pyc
 pip-selfcheck.json
+rainbow/core/util/xcom_util.py
