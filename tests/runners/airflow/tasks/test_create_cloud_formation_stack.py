@@ -24,9 +24,7 @@ from airflow.operators.python_operator import BranchPythonOperator
 
 from rainbow.runners.airflow.operators.cloudformation import CloudFormationCreateStackOperator, \
     CloudFormationCreateStackSensor
-from rainbow.runners.airflow.operators.kubernetes_pod_operator_with_input_output import \
-    KubernetesPodOperatorWithInputAndOutput
-from rainbow.runners.airflow.tasks import python, create_cloudformation_stack
+from rainbow.runners.airflow.tasks import create_cloudformation_stack
 from tests.util import dag_test_utils
 
 
@@ -45,11 +43,8 @@ class TestCreateCloudFormationStack(TestCase):
         task0.apply_task_to_dag()
 
         # Test metadata
-        self.assertEqual(task0.trigger_rule, 'all_done')
         self.assertEqual(task0.stack_name, task_id)
-        self.assertEqual(task0.time_out_in_minutes, 35)
-        self.assertEqual(task0.parameters, [{'ParameterKey': 'core_servers', 'ParameterValue': 2},
-                                            {'ParameterKey': 'emr_version', 'ParameterValue': 'emr-5.28.0'}])
+        self.assertEqual(task0.trigger_rule, 'all_done')
 
         # Test dag tests
         self.assertEqual(len(self.dag.tasks), 4)
@@ -67,7 +62,7 @@ class TestCreateCloudFormationStack(TestCase):
         self.assertEqual(task.task_id, 'is_cloudformation_stack_running')
 
         downstream_lst = task.downstream_list
-        # The order of the downstream tasks here does not matter. sorting is just to keep it deterministic for tests
+        # The order of the downstream tasks here does not matter. sorting just to keep it deterministic for tests
         downstream_lst.sort()
         self.assertEqual(len(downstream_lst), 2)
 
@@ -77,6 +72,10 @@ class TestCreateCloudFormationStack(TestCase):
     def __test_create_cloudformation_stack(self, task):
         self.assertIsInstance(task, CloudFormationCreateStackOperator)
         self.assertEqual(task.task_id, 'create_cloudformation_stack')
+        self.assertEqual(task.params['TimeoutInMinutes'], 35)
+        self.assertEqual(task.params['TemplateURL'], 'foo bar')
+        self.assertEqual(task.params['Parameters'], [{'ParameterKey': 'core_servers', 'ParameterValue': 2},
+                                                     {'ParameterKey': 'emr_version', 'ParameterValue': 'emr-5.28.0'}])
 
     def __test_cloudformation_watch_cluster_create(self, task):
         self.assertIsInstance(task, CloudFormationCreateStackSensor)
@@ -85,6 +84,7 @@ class TestCreateCloudFormationStack(TestCase):
     def __test_stack_creation_end(self, task):
         self.assertIsInstance(task, DummyOperator)
         self.assertEqual(task.task_id, 'stack_creation_end')
+        self.assertEqual(task.trigger_rule, 'all_done')
 
     @staticmethod
     def __create_conf(task_id):
