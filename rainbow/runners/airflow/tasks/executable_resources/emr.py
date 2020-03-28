@@ -18,12 +18,12 @@
 from airflow.contrib.operators.emr_add_steps_operator import EmrAddStepsOperator
 from airflow.contrib.sensors.emr_step_sensor import EmrStepSensor
 
-from rainbow.runners.airflow.tasks.resources import resource
+from rainbow.runners.airflow.tasks.executable_resources import executable_resource
 
 
-class EMRResourceTask(resource.ResourceTask):
+class EMRExecutableResourceTask(executable_resource.ExecutableResourceTask):
     """
-    Emr resource task
+    Emr executable resource task
     """
 
     def __init__(self, dag, pipeline_name, parent, config, trigger_rule, executable_commands):
