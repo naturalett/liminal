@@ -20,9 +20,9 @@ from abc import abstractmethod
 from rainbow.runners.airflow.model import task
 
 
-class ResourceTask(task.Task):
+class ExecutableResourceTask(task.Task):
     """
-    Resource Task
+    Executable Resource Task
     """
 
     def __init__(self, dag, pipeline_name, parent, config, trigger_rule, executable_commands):

@@ -31,7 +31,7 @@ class TestSparkTask(TestCase):
 
         dag_task1 = dag.tasks[1]
         self.assertIsInstance(dag_task1, EmrStepSensor)
-
+        print(task0.spark_submit)
         expected_spark_submit = ['spark-submit', '--name', 'hello_spark', '--deploy_mode', 'standalone', '--class',
                                  '.class', '--conf', 'spark.sql.parquet.writeLegacyFormat=true', '--conf',
                                  'spark.driver.cores=3', 'source_jar',
@@ -54,15 +54,14 @@ class TestSparkTask(TestCase):
                 'class': '.class',
                 'conf': {
                     'stack_id': 'cloudformation_emr_id',
-
-                    'resources': {
-                        'cloudformation_emr_id': {
-                            'cluster_type': 'emr',
-                            'parameters': {
-                                'aws_conn_id': 'aws_ni',
-                                'cluster_states': ['RUNNING', 'WAITING']
-                            }
-                        }
+                }
+            },
+            'resources': {
+                'cloudformation_emr_id': {
+                    'cluster_type': 'emr',
+                    'parameters': {
+                        'aws_conn_id': 'aws_ni',
+                        'cluster_states': ['RUNNING', 'WAITING']
                     }
                 }
             }
