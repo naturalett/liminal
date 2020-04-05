@@ -28,7 +28,6 @@ class TestSparkTask(TestCase):
         self.assertEqual(dag_task0.aws_conn_id, 'aws_ni')
 
         self.assertEqual(dag_task0.cluster_states, ['RUNNING', 'WAITING'])
-
         dag_task1 = dag.tasks[1]
         self.assertIsInstance(dag_task1, EmrStepSensor)
         print(task0.spark_submit)
