@@ -16,10 +16,10 @@
 # specific language governing permissions and limitations
 # under the License.
 from flatdict import FlatDict
+from rainbow.runners.airflow.tasks.clusters.cluster import ClusterTask
 
 from rainbow.core.util import class_util, rainbow_util
 from rainbow.runners.airflow.model import task
-from rainbow.runners.airflow.tasks.executable_resources.executable_resource import ExecutableResourceTask
 
 
 class SparkTask(task.Task):
@@ -31,17 +31,17 @@ class SparkTask(task.Task):
         super().__init__(dag, pipeline_name, parent, config, trigger_rule)
         self.source_path = self.config['source_path']
         self.task_name = self.config['task']
+        self.cluster_config = self.config['resources'][self.config['stack_id']]
         self.spark_submit = self.__generate_spark_submit()
 
     def apply_task_to_dag(self):
-        resource_config = self.config['executable_resource']
-        resource_parameters = resource_config.get('parameters', {})
-        resource_parameters['task'] = self.task_name
-        resource_task = self.__get_resource_task(resource_config['type'])(
-            self.dag, self.pipeline_name, self.parent, resource_parameters, self.trigger_rule,
+        cluster_params = self.cluster_config.get('parameters', {})
+        cluster_params['task'] = self.task_name
+        cluster_task = self.__get_cluster_task(self.cluster_config['cluster_type'])(
+            self.dag, self.pipeline_name, self.parent, cluster_params, self.trigger_rule,
             self.spark_submit)
 
-        return resource_task.apply_task_to_dag()
+        return cluster_task.apply_task_to_dag()
 
     def __generate_spark_submit(self):
         spark_submit = ['spark-submit']
@@ -56,10 +56,10 @@ class SparkTask(task.Task):
         return spark_submit
 
     @classmethod
-    def __get_resource_task(cls, resource_task_type):
-        resource_task_package = 'rainbow/runners/airflow/tasks/executable_resources'
-        return class_util.get_class_instance([resource_task_package, 'TODO'], ExecutableResourceTask,
-                                             resource_task_type)
+    def __get_cluster_task(cls, cluster_task_type):
+        clusters_package = 'rainbow/runners/airflow/tasks/clusters'
+        return class_util.get_class_instance([clusters_package, 'TODO'], ClusterTask,
+                                             cluster_task_type)
 
     @classmethod
     def __spark_args(cls, params: dict):

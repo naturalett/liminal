@@ -25,6 +25,9 @@ class TestSparkTask(TestCase):
         dag_task0 = dag.tasks[0]
         self.assertIsInstance(dag_task0, EmrAddStepsOperator)
 
+        self.assertEqual(dag_task0.aws_conn_id, 'aws_ni')
+
+        self.assertEqual(dag_task0.cluster_states, ['RUNNING', 'WAITING'])
         dag_task1 = dag.tasks[1]
         self.assertIsInstance(dag_task1, EmrStepSensor)
         print(task0.spark_submit)
@@ -58,11 +61,15 @@ class TestSparkTask(TestCase):
                 'cloudwatch-reporting-enabled': '',
                 'audit-reporting-enabled': '',
             },
-            'executable_resource': {
-                'type': 'emr',
-                'parameters': {
-                    'aws_conn_id': 'awn-ni',
-                    'cluster_states': ['RUNNING', 'WAITING']
+            'stack_id': 'cloudformation_emr_id',
+
+            'resources': {
+                'cloudformation_emr_id': {
+                    'cluster_type': 'emr',
+                    'parameters': {
+                        'aws_conn_id': 'aws_ni',
+                        'cluster_states': ['RUNNING', 'WAITING']
+                    }
                 }
             }
         }

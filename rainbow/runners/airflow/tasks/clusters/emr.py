@@ -18,10 +18,10 @@
 from airflow.contrib.operators.emr_add_steps_operator import EmrAddStepsOperator
 from airflow.contrib.sensors.emr_step_sensor import EmrStepSensor
 
-from rainbow.runners.airflow.tasks.executable_resources import executable_resource
+from rainbow.runners.airflow.tasks.clusters import cluster
 
 
-class EMRExecutableResourceTask(executable_resource.ExecutableResourceTask):
+class EMRClusterTask(cluster.ClusterTask):
     """
     Emr executable resource task
     """
@@ -37,7 +37,7 @@ class EMRExecutableResourceTask(executable_resource.ExecutableResourceTask):
             task_id=f'{self.task_name}_add_step',
             job_flow_name='',
             aws_conn_id=self.aws_conn_id,
-            steps=self.executable_commands,
+            steps=self.command,
             cluster_states=self.cluster_states,
             dag=self.dag
         )

@@ -69,6 +69,8 @@ def register_dags(configs_path):
 
                 for task in pipeline['tasks']:
                     task_type = task['type']
+                    # add resources configuration to tasks
+                    task['resources'] = pipeline['resources']
                     task_instance = get_task_class(task_type)(
                         dag, pipeline['pipeline'], parent if parent else None, task, trigger_rule
                     )

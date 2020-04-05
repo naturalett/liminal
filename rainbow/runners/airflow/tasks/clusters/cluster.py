@@ -20,14 +20,14 @@ from abc import abstractmethod
 from rainbow.runners.airflow.model import task
 
 
-class ExecutableResourceTask(task.Task):
+class ClusterTask(task.Task):
     """
-    Executable Resource Task
+    Cluster Task
     """
 
-    def __init__(self, dag, pipeline_name, parent, config, trigger_rule, executable_commands):
+    def __init__(self, dag, pipeline_name, parent, config, trigger_rule, command):
         super().__init__(dag, pipeline_name, parent, config, trigger_rule)
-        self.executable_commands = executable_commands
+        self.command = command
 
     @abstractmethod
     def apply_task_to_dag(self):
