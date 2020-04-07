@@ -51,12 +51,20 @@ def find_subclasses_in_packages(packages, parent_class):
     return classes
 
 
+cache = dict()
+
+
 def get_class_instance(packages, parent_class, class_type):
     """
     Return class of given class_type of type parent_class that can be found under given packages
     :return: class[class_type]
     """
-    return find_subclasses_in_packages(packages, parent_class)[class_type]
+    result = cache.get(parent_class)
+    if result is None:
+        result = find_subclasses_in_packages(packages, parent_class)
+        cache[parent_class] = result
+
+    return result[class_type]
 
 
 def __get_class(the_module, the_class):
