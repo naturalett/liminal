@@ -78,4 +78,4 @@ class SparkTask(task.Task):
 
     @classmethod
     def __additional_arguments(cls, params: dict):
-        return rainbow_util.from_dict_to_list(rainbow_util.reformat_dict_keys(params, "--{}"))
+        return rainbow_util.from_dict_to_list(params)

@@ -25,7 +25,7 @@ class TestSparkTask(TestCase):
         dag_task0 = dag.tasks[0]
         self.assertIsInstance(dag_task0, EmrAddStepsOperator)
 
-        self.assertEqual(dag_task0.aws_conn_id, 'aws_ni')
+        self.assertEqual(dag_task0.aws_conn_id, 'aws_conn_id')
 
         self.assertEqual(dag_task0.cluster_states, ['RUNNING', 'WAITING'])
 
@@ -34,8 +34,7 @@ class TestSparkTask(TestCase):
 
         expected_spark_submit = ['spark-submit', '--name', 'hello_spark', '--deploy_mode', 'standalone', '--class',
                                  '.class', '--conf', 'spark.sql.parquet.writeLegacyFormat=true', '--conf',
-                                 'spark.driver.cores=3', 'source_jar',
-                                 '--ni-main-class', 'main_class', '--ni-application-id', 'application_id', '--env',
+                                 'spark.driver.cores=3', 'source_jar', 'application-id', 'my_spark_test_id', '--env',
                                  'env', '--cloudwatch-reporting-enabled', '', '--audit-reporting-enabled', '']
 
         self.assertEqual(dag_task0.steps, expected_spark_submit)
@@ -58,11 +57,10 @@ class TestSparkTask(TestCase):
                 }
             },
             'application_arguments': {
-                'ni-main-class': 'main_class',
-                'ni-application-id': 'application_id',
-                'env': 'env',
-                'cloudwatch-reporting-enabled': '',
-                'audit-reporting-enabled': '',
+                'application-id': 'my_spark_test_id',
+                '--env': 'env',
+                '--cloudwatch-reporting-enabled': '',
+                '--audit-reporting-enabled': '',
             },
             'stack_id': 'cloudformation_emr_id',
 
@@ -70,7 +68,7 @@ class TestSparkTask(TestCase):
                 'cloudformation_emr_id': {
                     'cluster_type': 'emr',
                     'parameters': {
-                        'aws_conn_id': 'aws_ni',
+                        'aws_conn_id': 'aws_conn_id',
                         'cluster_states': ['RUNNING', 'WAITING']
                     }
                 }
