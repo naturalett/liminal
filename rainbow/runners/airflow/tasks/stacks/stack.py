@@ -15,30 +15,28 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from abc import abstractmethod
 
-from rainbow.runners.airflow.operators.job_status_operator import JobEndOperator
-from rainbow.runners.airflow.tasks.defaults.default_task import DefaultTask
+from rainbow.runners.airflow.model import task
 
 
-class JobEndTask(DefaultTask):
+class StackTask(task.Task):
     """
-      Job end task. Reports job end metrics.
+    Stack task
     """
-
-    def __init__(self, dag, pipeline_name, parent, config, trigger_rule):
+    def __init__(self, dag, pipeline_name, parent, config, trigger_rule, method):
         super().__init__(dag, pipeline_name, parent, config, trigger_rule)
+        self.method = method
+        print(self.config)
+        self.stack_name = self.config['name']
 
     def apply_task_to_dag(self):
-        job_end_task = JobEndOperator(
-            task_id='end',
-            namespace=self.metrics_namespace,
-            application_name=self.pipeline_name,
-            backends=self.metrics_backends,
-            dag=self.dag,
-            trigger_rule=self.trigger_rule
-        )
+        return getattr(self, self.method)()
 
-        if self.parent:
-            self.parent.set_downstream(job_end_task)
+    @abstractmethod
+    def create(self):
+        pass
 
-        return job_end_task
+    @abstractmethod
+    def delete(self):
+        pass

@@ -24,11 +24,11 @@ from airflow.operators.python_operator import BranchPythonOperator
 
 from rainbow.runners.airflow.operators.cloudformation import CloudFormationCreateStackOperator, \
     CloudFormationCreateStackSensor
-from rainbow.runners.airflow.tasks import create_cloudformation_stack
+from rainbow.runners.airflow.tasks.stacks import cloudformation
 from tests.util import dag_test_utils
 
 
-class TestCreateCloudFormationStack(TestCase):
+class TestCloudFormationCreateStackTask(TestCase):
 
     def test_apply_task_to_dag(self):
         # TODO: elaborate tests
@@ -38,8 +38,7 @@ class TestCreateCloudFormationStack(TestCase):
 
         config = self.__create_conf(task_id)
 
-        task0 = create_cloudformation_stack.CreateCloudFormationStackTask(self.dag, 'my_pipeline', None, config,
-                                                                          'all_done')
+        task0 = cloudformation.CloudFormationStackTask(self.dag, 'my_pipeline', None, config, 'all_done', 'create')
         task0.apply_task_to_dag()
 
         # Test metadata

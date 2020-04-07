@@ -1,38 +1,36 @@
-#
-# Licensed to the Apache Software Foundation (ASF) under one
-# or more contributor license agreements.  See the NOTICE file
-# distributed with this work for additional information
-# regarding copyright ownership.  The ASF licenses this file
-# to you under the Apache License, Version 2.0 (the
-# "License"); you may not use this file except in compliance
-# with the License.  You may obtain a copy of the License at
-#
-#   http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing,
-# software distributed under the License is distributed on an
-# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-# KIND, either express or implied.  See the License for the
-# specific language governing permissions and limitations
-# under the License.
 from airflow.operators.dummy_operator import DummyOperator
 from airflow.operators.python_operator import BranchPythonOperator
-
-from rainbow.runners.airflow.model import task
-from rainbow.runners.airflow.operators.cloudformation import CloudFormationHook, CloudFormationCreateStackOperator, \
-    CloudFormationCreateStackSensor
-
 from flatdict import FlatDict
 
+from rainbow.runners.airflow.operators.cloudformation import CloudFormationCreateStackOperator, \
+    CloudFormationCreateStackSensor, CloudFormationHook, CloudFormationDeleteStackOperator, \
+    CloudFormationDeleteStackSensor
+from rainbow.runners.airflow.tasks.stacks.stack import StackTask
 
-class CreateCloudFormationStackTask(task.Task):
+
+class CloudFormationStackTask(StackTask):
     """
-    Creates cloud_formation stack.
+    Cloudformation stack task
+    """
+    def __init__(self, dag, pipeline_name, parent, config, trigger_rule, method):
+        super().__init__(dag, pipeline_name, parent, config, trigger_rule, method)
+
+    def create(self):
+        return CreateCloudFormationStackTask(self.dag, self.pipeline_name, self.parent, self.config, self.trigger_rule) \
+            .apply_task_to_dag()
+
+    def delete(self):
+        return DeleteCloudFormationStackTask(self.dag, self.pipeline_name, self.parent, self.config, self.trigger_rule) \
+            .apply_task_to_dag()
+
+
+class CreateCloudFormationStackTask(CloudFormationStackTask):
+    """
+    Creates Cloudformation stack.
     """
 
     def __init__(self, dag, pipeline_name, parent, config, trigger_rule):
-        super().__init__(dag, pipeline_name, parent, config, trigger_rule)
-        self.stack_name = config['name']
+        super().__init__(dag, pipeline_name, parent, config, trigger_rule, method='')
         self.template_url = config['template_url']
         self.time_out_in_minutes = config.get('time_out_in_minutes', 25)
         self.parameters = self.__get_parameters()
@@ -80,6 +78,8 @@ class CreateCloudFormationStackTask(task.Task):
 
         create_stack_sensor_task.set_downstream(stack_creation_end_task)
 
+        return stack_creation_end_task
+
     def __cloudformation_stack_running_branch(self, **kwargs):
         cloudformation = CloudFormationHook().get_conn()
         try:
@@ -101,3 +101,54 @@ class CreateCloudFormationStackTask(task.Task):
     def __get_parameters(self):
         return [{'ParameterKey': x, 'ParameterValue': y} for (x, y) in
                 FlatDict(self.config['parameters']).items()]
+
+
+class DeleteCloudFormationStackTask(CloudFormationStackTask):
+    """
+    Deletes Cloudformation stack.
+    """
+
+    def __init__(self, dag, pipeline_name, parent, config, trigger_rule):
+        super().__init__(dag, pipeline_name, parent, config, trigger_rule, method='')
+
+    def apply_task_to_dag(self):
+        check_dags_queued_task = BranchPythonOperator(
+            task_id='is_dag_queue_empty',
+            python_callable=self.__queued_dag_runs_exists,
+            provide_context=True,
+            trigger_rule=self.trigger_rule,
+            dag=self.dag
+        )
+
+        delete_stack_task = CloudFormationDeleteStackOperator(
+            task_id='delete_cloudformation_stack',
+            params={'StackName': self.stack_name},
+            dag=self.dag
+        )
+
+        delete_stack_sensor = CloudFormationDeleteStackSensor(
+            task_id='cloudformation_watch_cluster_delete',
+            stack_name=self.stack_name,
+            dag=self.dag
+        )
+
+        stack_delete_end_task = DummyOperator(
+            task_id='stack_delete_end',
+            dag=self.dag
+        )
+
+        if self.parent:
+            self.parent.set_down_sream(check_dags_queued_task)
+
+        check_dags_queued_task.set_downstream(stack_delete_end_task)
+        check_dags_queued_task.set_downstream(delete_stack_task)
+        delete_stack_task.set_downstream(delete_stack_sensor)
+        delete_stack_sensor.set_downstream(stack_delete_end_task)
+
+        return stack_delete_end_task
+
+    def __queued_dag_runs_exists(self, **kwargs):
+        if self.dag.get_num_active_runs() > 1:
+            return 'stack_delete_end'
+        else:
+            return 'delete_cloudformation_stack'
