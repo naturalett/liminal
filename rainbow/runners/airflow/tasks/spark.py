@@ -19,8 +19,6 @@ from flatdict import FlatDict
 from rainbow.runners.airflow.tasks.clusters.cluster import ClusterTask
 
 from rainbow.core.util import class_util, rainbow_util
-
-from rainbow.core.util import class_util, rainbow_util
 from rainbow.runners.airflow.model import task
 
 
@@ -34,16 +32,6 @@ class SparkTask(task.Task):
         self.source_path = self.config['source_path']
         self.task_name = self.config['task']
         self.cluster_config = self.config['resources'][self.config['stack_id']]
-
-    def apply_task_to_dag(self):
-        cluster_params = self.cluster_config.get('parameters', {})
-        cluster_params['task'] = self.task_name
-        cluster_task = self.__get_cluster_task(self.cluster_config['cluster_type'])(
-            self.dag, self.pipeline_name, self.parent, cluster_params, self.trigger_rule,
-            self.spark_submit)
-
-        return cluster_task.apply_task_to_dag()
-
         self.spark_submit = self.__generate_spark_submit()
 
     def apply_task_to_dag(self):
@@ -87,10 +75,6 @@ class SparkTask(task.Task):
         spark_arguments = rainbow_util.from_dict_to_list(rainbow_util.reformat_dict_keys(params, "--{}"))
         spark_arguments.extend(conf_args_list)
         return spark_arguments
-
-    @classmethod
-    def __additional_arguments(cls, params: dict):
-        return rainbow_util.from_dict_to_list(rainbow_util.reformat_dict_keys(params, "--{}"))
 
     @classmethod
     def __additional_arguments(cls, params: dict):
