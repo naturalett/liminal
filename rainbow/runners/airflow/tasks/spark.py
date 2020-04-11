@@ -31,13 +31,13 @@ class SparkTask(task.Task):
         super().__init__(dag, pipeline_name, parent, config, trigger_rule)
         self.source_path = self.config['source_path']
         self.task_name = self.config['task']
-        self.cluster_config = self.config['resources'][self.config['stack_id']]
+        self.cluster_config = self.config['resources'][self.config['stack_id']]['cluster']
         self.spark_submit = self.__generate_spark_submit()
 
     def apply_task_to_dag(self):
         cluster_params = self.cluster_config.get('parameters', {})
         cluster_params['task'] = self.task_name
-        cluster_task = self.__get_cluster_task(self.cluster_config['cluster_type'])(
+        cluster_task = self.__get_cluster_task(self.cluster_config['type'])(
             self.dag, self.pipeline_name, self.parent, cluster_params, self.trigger_rule,
             self.spark_submit)
 

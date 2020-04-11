@@ -25,9 +25,9 @@ class ClusterTask(task.Task):
     Cluster Task
     """
 
-    def __init__(self, dag, pipeline_name, parent, config, trigger_rule, command):
+    def __init__(self, dag, pipeline_name, parent, config, trigger_rule, args):
         super().__init__(dag, pipeline_name, parent, config, trigger_rule)
-        self.command = command
+        self.args = args
 
     @abstractmethod
     def apply_task_to_dag(self):

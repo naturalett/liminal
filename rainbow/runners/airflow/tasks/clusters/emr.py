@@ -17,7 +17,7 @@
 # under the License.
 
 from airflow.contrib.sensors.emr_step_sensor import EmrStepSensor
-
+from airflow.contrib.operators.emr_add_steps_operator import EmrAddStepsOperator
 from rainbow.runners.airflow.tasks.clusters import cluster
 
 
@@ -26,20 +26,22 @@ class EMRClusterTask(cluster.ClusterTask):
     Emr executable resource task
     """
 
-    def __init__(self, dag, pipeline_name, parent, config, trigger_rule, executable_commands):
-        super().__init__(dag, pipeline_name, parent, config, trigger_rule, executable_commands)
+    def __init__(self, dag, pipeline_name, parent, config, trigger_rule, args):
+        super().__init__(dag, pipeline_name, parent, config, trigger_rule, args)
         self.aws_conn_id = self.config['aws_conn_id']
         self.cluster_states = self.config['cluster_states']
         self.task_name = self.config['task']
-        self.cluster_name = self.config['cluster_name']
+        self.job_flow_id = self.config.get('cluster_id', None)
+        self.job_flow_name = self.config.get('cluster_name', None)
+        self.steps = self.__generate_steps()
 
     def apply_task_to_dag(self):
-        from airflow.contrib.operators.emr_add_steps_operator import EmrAddStepsOperator
         add_step = EmrAddStepsOperator(
             task_id=f'{self.task_name}_add_step',
-            job_flow_name=self.cluster_name,
+            job_flow_id=self.job_flow_id,
+            job_flow_name=self.job_flow_name,
             aws_conn_id=self.aws_conn_id,
-            steps=self.command,
+            steps=self.steps,
             cluster_states=self.cluster_states,
             dag=self.dag
         )
@@ -49,8 +51,8 @@ class EMRClusterTask(cluster.ClusterTask):
 
         emr_sensor_step = EmrStepSensor(
             task_id=f'{self.task_name}_watch_step',
-            job_flow_id=f'''{{ task_instance.xcom_pull({add_step.task_id}, key='job_flow_id') }}''',
-            step_id=f'''{{ task_instance.xcom_pull({add_step.task_id}, key='return_value')[0] }}''',
+            job_flow_id="{" + "{ task_instance.xcom_pull('" + add_step.task_id + "', key='job_flow_id') }" + "}",
+            step_id="{" + "{ task_instance.xcom_pull('" + add_step.task_id + "', key='return_value')[0] }" + "}",
             aws_conn_id=self.aws_conn_id,
             dag=self.dag
         )
@@ -58,3 +60,15 @@ class EMRClusterTask(cluster.ClusterTask):
         add_step.set_downstream(emr_sensor_step)
 
         return emr_sensor_step
+
+    def __generate_steps(self):
+        return [
+            {
+                'Name': self.task_name,
+                'ActionOnFailure': self.config.get('ActionOnFailure', 'CONTINUE'),
+                'HadoopJarStep': {
+                    'Jar': 'command-runner.jar',
+                    'Args': self.args
+                }
+            }
+        ]

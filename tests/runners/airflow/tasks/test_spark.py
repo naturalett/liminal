@@ -34,12 +34,23 @@ class TestSparkTask(TestCase):
         dag_task1 = dag.tasks[1]
         self.assertIsInstance(dag_task1, EmrStepSensor)
 
-        expected_spark_submit = ['spark-submit', '--name', 'hello_spark', '--deploy_mode', 'standalone', '--class',
+        expected_spark_submit = ['spark-submit', '--name', 'hello_spark', '--deploy-mode', 'standalone', '--class',
                                  '.class', '--conf', 'spark.sql.parquet.writeLegacyFormat=true', '--conf',
                                  'spark.driver.cores=3', 'source_jar', 'application-id', 'my_spark_test_id', '--env',
                                  'env', '--cloudwatch-reporting-enabled', '', '--audit-reporting-enabled', '']
 
-        self.assertEqual(dag_task0.steps, expected_spark_submit)
+        expected_emr_steps = [
+            {
+                'Name': task0.task_name,
+                'ActionOnFailure': 'CONTINUE',
+                'HadoopJarStep': {
+                    'Jar': 'command-runner.jar',
+                    'Args': expected_spark_submit
+                }
+            }
+        ]
+
+        self.assertEqual(dag_task0.steps, expected_emr_steps)
 
         self.assertEqual(task0.spark_submit, expected_spark_submit)
 
@@ -50,7 +61,7 @@ class TestSparkTask(TestCase):
             'source_path': 'source_jar',
             'spark_arguments': {
                 'name': 'hello_spark',
-                'deploy_mode': 'standalone',
+                'deploy-mode': 'standalone',
                 'class': '.class',
                 'conf': {
                     'spark.sql.parquet.writeLegacyFormat': 'true',
@@ -67,12 +78,13 @@ class TestSparkTask(TestCase):
 
             'resources': {
                 'cloudformation_emr_id': {
-                    'cluster_type': 'emr',
-
-                    'parameters': {
-                        'cluster_name': 'cluster_name_id',
-                        'aws_conn_id': 'aws_conn_id',
-                        'cluster_states': ['RUNNING', 'WAITING']
+                    'cluster': {
+                        'type': 'emr',
+                        'parameters': {
+                            'cluster_name': 'cluster_name_id',
+                            'aws_conn_id': 'aws_conn_id',
+                            'cluster_states': ['RUNNING', 'WAITING']
+                        }
                     }
                 }
             }
