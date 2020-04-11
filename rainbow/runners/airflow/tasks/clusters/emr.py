@@ -15,7 +15,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-from airflow.contrib.operators.emr_add_steps_operator import EmrAddStepsOperator
+
 from airflow.contrib.sensors.emr_step_sensor import EmrStepSensor
 
 from rainbow.runners.airflow.tasks.clusters import cluster
@@ -31,11 +31,13 @@ class EMRClusterTask(cluster.ClusterTask):
         self.aws_conn_id = self.config['aws_conn_id']
         self.cluster_states = self.config['cluster_states']
         self.task_name = self.config['task']
+        self.cluster_name = self.config['cluster_name']
 
     def apply_task_to_dag(self):
+        from airflow.contrib.operators.emr_add_steps_operator import EmrAddStepsOperator
         add_step = EmrAddStepsOperator(
             task_id=f'{self.task_name}_add_step',
-            job_flow_name='',
+            job_flow_name=self.cluster_name,
             aws_conn_id=self.aws_conn_id,
             steps=self.command,
             cluster_states=self.cluster_states,

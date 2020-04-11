@@ -29,6 +29,8 @@ class TestSparkTask(TestCase):
 
         self.assertEqual(dag_task0.cluster_states, ['RUNNING', 'WAITING'])
 
+        self.assertEqual(dag_task0.job_flow_name, 'cluster_name_id')
+
         dag_task1 = dag.tasks[1]
         self.assertIsInstance(dag_task1, EmrStepSensor)
 
@@ -45,7 +47,6 @@ class TestSparkTask(TestCase):
     def __create_conf(task_id):
         return {
             'task': task_id,
-            'name': 'test_spark_task',
             'source_path': 'source_jar',
             'spark_arguments': {
                 'name': 'hello_spark',
@@ -67,7 +68,9 @@ class TestSparkTask(TestCase):
             'resources': {
                 'cloudformation_emr_id': {
                     'cluster_type': 'emr',
+
                     'parameters': {
+                        'cluster_name': 'cluster_name_id',
                         'aws_conn_id': 'aws_conn_id',
                         'cluster_states': ['RUNNING', 'WAITING']
                     }
