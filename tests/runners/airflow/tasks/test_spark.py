@@ -9,7 +9,7 @@ from tests.util import dag_test_utils
 
 class TestSparkTask(TestCase):
     def test_apply_task_to_dag(self):
-        # TODO: elaborate tests
+
         dag = dag_test_utils.create_dag()
 
         task_id = 'my_spark_task'
@@ -34,7 +34,7 @@ class TestSparkTask(TestCase):
         dag_task1 = dag.tasks[1]
         self.assertIsInstance(dag_task1, EmrStepSensor)
 
-        expected_spark_submit = ['spark-submit', '--name', 'hello_spark', '--deploy-mode', 'standalone', '--class',
+        expected_spark_submit = ['spark-submit', '--name', 'hello_spark', '--deploy-mode', 'client', '--class',
                                  '.class', '--conf', 'spark.sql.parquet.writeLegacyFormat=true', '--conf',
                                  'spark.driver.cores=3', 'source_jar', 'application-id', 'my_spark_test_id', '--env',
                                  'env', '--cloudwatch-reporting-enabled', '', '--audit-reporting-enabled', '']
@@ -61,7 +61,7 @@ class TestSparkTask(TestCase):
             'source_path': 'source_jar',
             'spark_arguments': {
                 'name': 'hello_spark',
-                'deploy-mode': 'standalone',
+                'deploy-mode': 'client',
                 'class': '.class',
                 'conf': {
                     'spark.sql.parquet.writeLegacyFormat': 'true',
@@ -80,7 +80,7 @@ class TestSparkTask(TestCase):
                 'cloudformation_emr_id': {
                     'cluster': {
                         'type': 'emr',
-                        'parameters': {
+                        'arguments': {
                             'cluster_name': 'cluster_name_id',
                             'aws_conn_id': 'aws_conn_id',
                             'cluster_states': ['RUNNING', 'WAITING']

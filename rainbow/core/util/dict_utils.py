@@ -1,6 +1,3 @@
-# TODO: rename class name
-
-
 from flatdict import FlatDict
 
 

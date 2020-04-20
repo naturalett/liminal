@@ -18,7 +18,7 @@
 from flatdict import FlatDict
 from rainbow.runners.airflow.tasks.clusters.cluster import ClusterTask
 
-from rainbow.core.util import class_util, rainbow_util
+from rainbow.core.util import class_util, dict_utils
 from rainbow.runners.airflow.model import task
 
 
@@ -35,9 +35,9 @@ class SparkTask(task.Task):
         self.spark_submit = self.__generate_spark_submit()
 
     def apply_task_to_dag(self):
-        cluster_params = self.cluster_config.get('parameters', {})
+        cluster_params = self.cluster_config.get('arguments', {})
         cluster_params['task'] = self.task_name
-        cluster_task = self.__get_cluster_task(self.cluster_config['type'])(
+        cluster_task = self.__get_cluster_task()(
             self.dag, self.pipeline_name, self.parent, cluster_params, self.trigger_rule,
             self.spark_submit)
 
@@ -46,8 +46,8 @@ class SparkTask(task.Task):
     def __generate_spark_submit(self):
         spark_submit = ['spark-submit']
 
-        spark_arguments = self.__spark_args(self.config['spark_arguments'])
-        application_arguments = self.__additional_arguments(self.config['application_arguments'])
+        spark_arguments = self.__spark_args()
+        application_arguments = self.__additional_arguments()
 
         spark_submit.extend(spark_arguments)
         spark_submit.extend([self.source_path])
@@ -55,27 +55,22 @@ class SparkTask(task.Task):
 
         return spark_submit
 
-    @classmethod
-    def __get_cluster_task(cls, cluster_task_type):
+    def __get_cluster_task(self):
         clusters_package = 'rainbow/runners/airflow/tasks/clusters'
-        return class_util.get_class_instance([clusters_package, 'TODO'], ClusterTask,
-                                             cluster_task_type)
+        return class_util.get_class_instance([clusters_package, 'TODO'], ClusterTask, self.cluster_config['type'])
 
-    @classmethod
-    def __spark_args(cls, params: dict):
+    def __spark_args(self):
         # reformat spark conf
         conf_args_list = list()
+        params = self.config.get('spark_arguments', {})
 
-        for conf_arg in ['{}={}'.format(k, v) for (k, v) in FlatDict(params['conf']).items()]:
+        for conf_arg in ['{}={}'.format(k, v) for (k, v) in FlatDict(params.pop('conf', {})).items()]:
             conf_args_list.append('--conf')
             conf_args_list.append(conf_arg)
 
-        params.__delitem__('conf')
-
-        spark_arguments = rainbow_util.from_dict_to_list(rainbow_util.reformat_dict_keys(params, "--{}"))
+        spark_arguments = dict_utils.from_dict_to_list(dict_utils.reformat_dict_keys(params, "--{}"))
         spark_arguments.extend(conf_args_list)
         return spark_arguments
 
-    @classmethod
-    def __additional_arguments(cls, params: dict):
-        return rainbow_util.from_dict_to_list(params)
+    def __additional_arguments(self):
+        return dict_utils.from_dict_to_list(self.config.get('application_arguments', {}))
