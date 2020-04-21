@@ -35,11 +35,15 @@ class SparkTask(task.Task):
         self.spark_submit = self.__generate_spark_submit()
 
     def apply_task_to_dag(self):
-        cluster_params = self.cluster_config.get('arguments', {})
+        cluster_params = self.cluster_config.get('parameters', {})
         cluster_params['task'] = self.task_name
         cluster_task = self.__get_cluster_task()(
-            self.dag, self.pipeline_name, self.parent, cluster_params, self.trigger_rule,
-            self.spark_submit)
+            dag=self.dag,
+            pipeline_name=self.pipeline_name,
+            parent=self.parent,
+            config=cluster_params,
+            trigger_rule=self.trigger_rule,
+            args=self.spark_submit)
 
         return cluster_task.apply_task_to_dag()
 
@@ -61,15 +65,15 @@ class SparkTask(task.Task):
 
     def __spark_args(self):
         # reformat spark conf
-        conf_args_list = list()
+        flat_conf_args = list()
         params = self.config.get('spark_arguments', {})
 
         for conf_arg in ['{}={}'.format(k, v) for (k, v) in FlatDict(params.pop('conf', {})).items()]:
-            conf_args_list.append('--conf')
-            conf_args_list.append(conf_arg)
+            flat_conf_args.append('--conf')
+            flat_conf_args.append(conf_arg)
 
         spark_arguments = dict_utils.from_dict_to_list(dict_utils.reformat_dict_keys(params, "--{}"))
-        spark_arguments.extend(conf_args_list)
+        spark_arguments.extend(flat_conf_args)
         return spark_arguments
 
     def __additional_arguments(self):

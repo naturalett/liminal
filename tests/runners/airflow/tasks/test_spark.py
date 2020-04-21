@@ -80,7 +80,7 @@ class TestSparkTask(TestCase):
                 'cloudformation_emr_id': {
                     'cluster': {
                         'type': 'emr',
-                        'arguments': {
+                        'parameters': {
                             'cluster_name': 'cluster_name_id',
                             'aws_conn_id': 'aws_conn_id',
                             'cluster_states': ['RUNNING', 'WAITING']
