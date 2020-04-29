@@ -138,7 +138,6 @@ def handle_stacks_by_method(dag, pipeline, parent, method_type):
     :return: None if pipeline['stacks'] is empty/None. else, return ended stacks task
     """
     stacks = pipeline.get('stacks', [])
-
     if not stacks:
         print(f'stacks list is empty. skipping {method_type} stacks tasks')
         return None
@@ -147,26 +146,18 @@ def handle_stacks_by_method(dag, pipeline, parent, method_type):
     user_stack_task_package = 'TODO: user_stacks_package'
     resources_dict_key = 'resources'
 
-    start_handle_stacks = DummyOperator(dag=dag, task_id=f'start_{method_type}_stacks_tasks',
-                                        trigger_rule='all_success')
-
-    if parent:
-        parent.set_downstream(start_handle_stacks)
-
+    start_handle_stacks = DummyOperator(dag=dag, task_id=f'start_{method_type}_all_stacks', trigger_rule='all_success')
+    parent.set_downstream(start_handle_stacks)
     parent = start_handle_stacks
 
-    end_handle_stacks = DummyOperator(dag=dag, task_id=f'end_{method_type}_stacks_tasks',
-                                      trigger_rule='all_success')
+    end_handle_stacks = DummyOperator(dag=dag, task_id=f'end_{method_type}_all_stacks', trigger_rule='all_success')
 
     for stack_task in stacks:
         stack_task[resources_dict_key] = pipeline[resources_dict_key]
-        # class_util.get_class_instances use cache of parent package.
         stack_task_instance = class_util.get_class_instance([stack_package, user_stack_task_package], StackTask,
                                                             stack_task['type'])(dag, pipeline['pipeline'], parent,
                                                                                 stack_task, 'all_done', method_type)
-
-        stack_resources_tasks = stack_task_instance.apply_task_to_dag()
-        end_handle_stacks.set_upstream(stack_resources_tasks)
+        end_handle_stacks.set_upstream(stack_task_instance.apply_task_to_dag())
 
     return end_handle_stacks
 
