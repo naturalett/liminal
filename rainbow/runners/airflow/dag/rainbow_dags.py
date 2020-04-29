@@ -21,12 +21,14 @@ from datetime import datetime, timedelta
 import yaml
 from airflow import DAG
 from airflow.models import Variable
+from airflow.operators.dummy_operator import DummyOperator
 
 from rainbow.core.util import class_util
 from rainbow.core.util import files_util
 from rainbow.runners.airflow.model.task import Task
 from rainbow.runners.airflow.tasks.defaults.job_end import JobEndTask
 from rainbow.runners.airflow.tasks.defaults.job_start import JobStartTask
+from rainbow.runners.airflow.tasks.stacks.stack import StackTask
 
 __DEPENDS_ON_PAST = 'depends_on_past'
 
@@ -68,6 +70,11 @@ def register_dags(configs_path):
                 job_start_task = JobStartTask(dag, pipeline_name, None, pipeline, 'all_success')
                 parent = job_start_task.apply_task_to_dag()
 
+                create_stacks_tasks = create_stacks(dag, pipeline, parent)
+
+                if create_stacks_tasks:
+                    parent = create_stacks_tasks
+
                 trigger_rule = 'all_success'
                 if 'always_run' in config and config['always_run']:
                     trigger_rule = 'all_done'
@@ -77,8 +84,12 @@ def register_dags(configs_path):
                     task_instance = get_task_class(task_type)(
                         dag, pipeline['pipeline'], parent if parent else None, task, trigger_rule
                     )
-
                     parent = task_instance.apply_task_to_dag()
+
+                delete_stacks_tasks = delete_stacks(dag, pipeline, parent)
+
+                if delete_stacks_tasks:
+                    parent = delete_stacks_tasks
 
                 job_end_task = JobEndTask(dag, pipeline_name, parent, pipeline, 'all_done')
                 job_end_task.apply_task_to_dag()
@@ -105,6 +116,59 @@ print(f'Finished loading task implementations: {task_classes}')
 
 def get_task_class(task_type):
     return task_classes[task_type]
+
+
+def create_stacks(dag, pipeline, parent):
+    """ Generate all required tasks to create stacks"""
+    return handle_stacks_by_method(dag, pipeline, parent, method_type='create')
+
+
+def delete_stacks(dag, pipeline, parent):
+    """ Generate all required tasks to delete stacks"""
+    return handle_stacks_by_method(dag, pipeline, parent, method_type='delete')
+
+
+def handle_stacks_by_method(dag, pipeline, parent, method_type):
+    """
+    Handling all required tasks for given stack_type according to the the given method_type
+    :param dag:
+    :param pipeline:
+    :param parent: parent rainbow task
+    :param method_type: available stack operations: 'delete' or 'create'
+    :return: None if pipeline['stacks'] is empty/None. else, return ended stacks task
+    """
+    stacks = pipeline.get('stacks', [])
+
+    if not stacks:
+        print(f'stacks list is empty. skipping {method_type} stacks tasks')
+        return None
+
+    stack_package = 'rainbow/runners/airflow/tasks/stacks'
+    user_stack_task_package = 'TODO: user_stacks_package'
+    resources_dict_key = 'resources'
+
+    start_handle_stacks = DummyOperator(dag=dag, task_id=f'start_{method_type}_stacks_tasks',
+                                        trigger_rule='all_success')
+
+    if parent:
+        parent.set_downstream(start_handle_stacks)
+
+    parent = start_handle_stacks
+
+    end_handle_stacks = DummyOperator(dag=dag, task_id=f'end_{method_type}_stacks_tasks',
+                                      trigger_rule='all_success')
+
+    for stack_task in stacks:
+        stack_task[resources_dict_key] = pipeline[resources_dict_key]
+        # class_util.get_class_instances use cache of parent package.
+        stack_task_instance = class_util.get_class_instance([stack_package, user_stack_task_package], StackTask,
+                                                            stack_task['type'])(dag, pipeline['pipeline'], parent,
+                                                                                stack_task, 'all_done', method_type)
+
+        stack_resources_tasks = stack_task_instance.apply_task_to_dag()
+        end_handle_stacks.set_upstream(stack_resources_tasks)
+
+    return end_handle_stacks
 
 
 register_dags(Variable.get('rainbows_dir'))
