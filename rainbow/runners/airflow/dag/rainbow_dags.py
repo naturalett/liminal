@@ -58,7 +58,7 @@ def register_dags(configs_path):
                 }
 
                 default_args.update(override_args)
-                default_args.pop('resources')
+                
                 dag = DAG(
                     dag_id=pipeline_name,
                     default_args=default_args,
