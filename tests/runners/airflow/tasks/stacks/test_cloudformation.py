@@ -19,15 +19,13 @@
 import unittest
 from unittest import TestCase
 
-from airflow.operators.dummy_operator import DummyOperator
-from airflow.operators.python_operator import BranchPythonOperator
 from airflow.utils import timezone
 from jsonpickle import json
-from mock import MagicMock
+from mock import MagicMock, patch
 
 from rainbow.runners.airflow.operators.cloudformation import CloudFormationCreateStackOperator, \
-    CloudFormationCreateStackSensor
-from rainbow.runners.airflow.tasks.stacks import cloudformation_stack
+    CloudFormationDeleteStackOperator
+from rainbow.runners.airflow.tasks.stacks import stack_factory
 from tests.util import dag_test_utils
 
 DEFAULT_DATE = timezone.datetime(2019, 1, 1)
@@ -37,119 +35,66 @@ class TestCloudFormationStackTask(TestCase):
     """
     Test create/delete of cloudformation_stack
     """
-    # TODO: Write tests
-    # def setUp(self):
-    #     pass
-    #
-    # def test_apply_task_to_dag(self):
-    #
-    #     global stack_idx, stack_name, num_stack_resources_tasks
-    #     num_stack_resources_tasks = 4
-    #     stack_idx = 1
-    #
-    #     self.task_id = 'my-task'
-    #     config = self.__create_conf(self.task_id)
-    #     for stack_task in config['stacks']:
-    #         stack_task['resources'] = config['resources']
-    #         stack_name = f'{self.task_id}-{stack_idx}'
-    #         self.__test_create_stack(stack_task)
-    #         self.__test_delete_stack(stack_task)
-    #         stack_idx += 1
-    #
-    # def __test_create_stack(self, stack_task):
-    #     self.__init_dag()
-    #     # Mock out the cloudformation_client (moto fails with an exception).
-    #     self.cloudformation_client_mock = MagicMock()
-    #
-    #     self.mock_context = MagicMock()
-    #
-    #     task = cloudformation_stack.CloudFormationStackTask(self.dag, 'my_pipeline', None, stack_task, 'all_done',
-    #                                                         'create')
-    #
-    #     self.assertEqual(task.stack_name, stack_name)
-    #     self.assertEqual(task.trigger_rule, 'all_done')
-    #     self.assertIsNotNone(task.config['resources_ids'])
-    #
-    #     task.apply_task_to_dag()
-    #
-    #     # 4 tasks for each resource and another 2 shared tasks
-    #     self.assertEqual(len(self.dag.tasks), num_stack_resources_tasks * stack_idx + 2)
-    #
-    #     self.__test_shared_stack_tasks('create')
-    #
-    #     self.__test_create_stack_tasks(task)
-    #
-    # def __test_delete_stack(self, stack_task):
-    #
-    #     self.__init_dag()
-    #
-    #     task = cloudformation_stack.CloudFormationStackTask(self.dag, 'my_pipeline', None, stack_task, 'all_done',
-    #                                                         'delete')
-    #     self.assertEqual(task.stack_name, stack_name)
-    #     self.assertEqual(task.trigger_rule, 'all_done')
-    #     self.assertIsNotNone(task.config['resources_ids'])
-    #
-    #     task.apply_task_to_dag()
-    #
-    #     # 4 tasks for each resource and another 2 shared tasks
-    #     self.assertEqual(len(self.dag.tasks), num_stack_resources_tasks * stack_idx + 2)
-    #
-    #     self.__test_shared_stack_tasks('delete')
-    #
-    # def __test_create_stack_tasks(self, task):
-    #     i = 1
-    #     for resource_id in task.config['resources_ids']:
-    #         global dynamic_stack_name
-    #         dynamic_stack_name = f'{stack_name}-{resource_id}'
-    #         self.__test_is_cloudformation_stack_running(self.dag.tasks[i])
-    #         i = i + num_stack_resources_tasks
-    #
-    # def __test_is_cloudformation_stack_running(self, task):
-    #
-    #     self.assertIsInstance(task, BranchPythonOperator)
-    #
-    #     self.assertEqual(task.task_id, f'is_cloudformation_{dynamic_stack_name}_running')
-    #
-    #     downstream_lst = task.downstream_list
-    #     # The order of the downstream tasks here does not matter. sorting just to keep it deterministic for tests
-    #     downstream_lst.sort()
-    #     self.assertEqual(len(downstream_lst), 2)
-    #
-    #     self.__test_create_cloudformation_stack(downstream_lst[0])
-    #     self.__test_stack_creation_end(downstream_lst[1])
-    #
-    # def __test_create_cloudformation_stack(self, task):
-    #
-    #     self.assertIsInstance(task, CloudFormationCreateStackOperator)
-    #     self.assertEqual(task.task_id, f'create_cloudformation_{dynamic_stack_name}')
-    #
-    #     task.execute(self.mock_context)
-    #
-    #     self.cloudformation_client_mock.create_stack.assert_any_call(StackName=dynamic_stack_name,
-    #                                                                  TimeoutInMinutes=stack_idx)
-    #
-    #     self.__test_cloudformation_watch_cluster_create(task.downstream_list[0])
-    #
-    # def __test_cloudformation_watch_cluster_create(self, task):
-    #     self.assertIsInstance(task, CloudFormationCreateStackSensor)
-    #     self.assertEqual(task.task_id, f'cloudformation_watch_{dynamic_stack_name}_create')
-    #
-    # def __test_stack_creation_end(self, task):
-    #     self.assertIsInstance(task, DummyOperator)
-    #     self.assertEqual(task.task_id, f'creation_end_{dynamic_stack_name}')
-    #     self.assertEqual(task.trigger_rule, 'all_done')
-    #
-    # def __test_shared_stack_tasks(self, method_type):
-    #     start_stack_task = self.dag.tasks[0]
-    #     self.assertIsInstance(start_stack_task, DummyOperator)
-    #     self.assertEqual(start_stack_task.task_id, f'start_{stack_name}_{method_type}_tasks')
-    #
-    #     end_stack_task = self.dag.tasks[len(self.dag.tasks) - 1]
-    #     self.assertIsInstance(end_stack_task, DummyOperator)
-    #     self.assertEqual(end_stack_task.task_id, f'end_{stack_name}_{method_type}_tasks')
-    #
-    # def __init_dag(self):
-    #     self.dag = dag_test_utils.create_dag()
+
+    def setUp(self):
+        self.task_id = 'my-task'
+        self.config = self.__create_conf(self.task_id)
+        self.dag = dag_test_utils.create_dag()
+
+        # Set up Mock
+
+        # Mock out the cloudformation_client (moto fails with an exception).
+        self.cloudformation_client_mock = MagicMock()
+
+        # Mock out the emr_client creator
+        cloudformation_session_mock = MagicMock()
+        cloudformation_session_mock.client.return_value = self.cloudformation_client_mock
+        self.boto3_session_mock = MagicMock(return_value=cloudformation_session_mock)
+        self.mock_context = MagicMock()
+
+        self.config['pipeline'] = 'my-pipe'
+
+    def test_apply_task_to_dag_create(self):
+        stack_factory.create_stacks(dag=self.dag, pipeline=self.config, parent=None)
+
+        self.__test_create_stack_operator(self.dag.tasks[4])
+
+    def test_apply_task_to_dag_delete(self):
+        stack_factory.delete_stacks(dag=self.dag, pipeline=self.config, parent=None)
+
+        self.assertEqual(self.dag.tasks[0].task_id, 'start_delete_all_stacks')
+        self.assertEqual(self.dag.tasks[1].task_id, 'end_delete_all_stacks')
+        self.assertEqual(self.dag.tasks[2].task_id, 'start_delete_my-task-1_stack')
+        self.assertEqual(self.dag.tasks[3].task_id, 'mycluster-20_is_dag_queue_empty')
+
+        self.__test_delete_stack_operator(self.dag.tasks[4])
+
+    def __test_delete_stack_operator(self, task):
+        self.assertIsInstance(task, CloudFormationDeleteStackOperator)
+        self.assertEqual(task.task_id, 'delete_cloudformation_mycluster-20')
+
+        with patch('boto3.session.Session', self.boto3_session_mock):
+            task.execute(self.mock_context)
+
+        self.cloudformation_client_mock.delete_stack.assert_any_call(StackName='mycluster-20')
+
+    def __test_create_stack_operator(self, task):
+        self.assertIsInstance(task, CloudFormationCreateStackOperator)
+        self.assertEqual(task.task_id, 'create_cloudformation_mycluster-20')
+        with patch('boto3.session.Session', self.boto3_session_mock):
+            task.execute(self.mock_context)
+
+        self.cloudformation_client_mock.create_stack.assert_any_call(
+            TemplateBody='{"AWSTemplateFormatVersion": "2010-09-09", "Description": "TemplateBody",'
+                         ' "Parameters":'
+                         ' {"myParam1": {"Description": "Test my_param_1", "Type": "String"}, "myParam2":'
+                         ' {"Description": "Test my_param_2", "Type": "String"}}, "Resources":'
+                         ' {"EC2Instance1": {"Properties": {"KeyName": "dummy"}, "Type": "emr"}}}',
+            TimeoutInMinutes=1,
+            Parameters=[{'ParameterKey': 'myParam1', 'ParameterValue': '2'},
+                        {'ParameterKey': 'myParam2', 'ParameterValue': 'myParam2'},
+                        {'ParameterKey': 'myParam3', 'ParameterValue': '3'}],
+            StackName='mycluster-20')
 
     @staticmethod
     def __create_conf(task_id) -> dict:
@@ -176,11 +121,9 @@ class TestCloudFormationStackTask(TestCase):
                 'mycluster-20': {
                     'type': 'emr',
                     'aws_conn_id': 'aws_conn_id_1',
-                    'overwrite': {
-                        'parameters': {
-                            'myParam1': "2",
-                            'myParam3': "3"
-                        }
+                    'Parameters': {
+                        'myParam1': "2",
+                        'myParam3': "3"
                     }
                 },
                 'mycluster-21': {
@@ -199,12 +142,11 @@ class TestCloudFormationStackTask(TestCase):
 
 dummy_template = {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "Stack 1",
+    "Description": "TemplateBody",
     "Resources": {
         "EC2Instance1": {
-            "Type": "AWS::EC2::Instance",
+            "Type": "emr",
             "Properties": {
-                "ImageId": "ami-d3adb33f",
                 "KeyName": "dummy"
             }
         }

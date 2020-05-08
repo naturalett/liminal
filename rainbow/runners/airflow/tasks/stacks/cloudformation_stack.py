@@ -32,33 +32,32 @@ class CloudFormationStackTask(stack.StackTask):
 
     def __init__(self, dag, pipeline_name, parent, config, trigger_rule, method):
         super().__init__(dag, pipeline_name, parent, config, trigger_rule, method)
+        self.tasks_names = self.__set_constant_task_names()
 
-    def create(self, resource):
-        self.__set_global_vars(resource)
-
+    def create(self):
         check_cloudformation_stack_exists_task = BranchPythonOperator(
-            task_id=f'is_cloudformation_{dynamic_stack_name}_running',
+            task_id=f'is_cloudformation_{self.stack_name}_running',
             python_callable=self.__cloudformation_stack_running_branch,
             provide_context=True,
             dag=self.dag
         )
 
         create_cloudformation_stack_task = CloudFormationCreateStackOperator(
-            task_id=create_stack_task_id,
+            task_id=self.tasks_names.CREATE_STACK_TASK_ID,
             params={
-                **self.__reformatted_params(resource=resource)
+                **self.__reformatted_params()
             },
             dag=self.dag
         )
 
         create_stack_sensor_task = CloudFormationCreateStackSensor(
-            task_id=f'cloudformation_watch_{dynamic_stack_name}_create',
-            stack_name=dynamic_stack_name,
+            task_id=f'cloudformation_watch_{self.stack_name}_create',
+            stack_name=self.stack_name,
             dag=self.dag
         )
 
         stack_creation_end_task = DummyOperator(
-            task_id=stack_creation_end_task_id,
+            task_id=self.tasks_names.STACK_CREATION_END_TASK_ID,
             dag=self.dag,
             trigger_rule='all_done'
         )
@@ -74,12 +73,9 @@ class CloudFormationStackTask(stack.StackTask):
 
         return stack_creation_end_task
 
-    def delete(self, resource):
-
-        self.__set_global_vars(resource)
-
+    def delete(self):
         check_dags_queued_task = BranchPythonOperator(
-            task_id=f'{dynamic_stack_name}_is_dag_queue_empty',
+            task_id=f'{self.stack_name}_is_dag_queue_empty',
             python_callable=self.__queued_dag_runs_exists,
             provide_context=True,
             trigger_rule='all_done',
@@ -87,19 +83,19 @@ class CloudFormationStackTask(stack.StackTask):
         )
 
         delete_stack_task = CloudFormationDeleteStackOperator(
-            task_id=delete_stack_task_id,
-            params={'StackName': dynamic_stack_name},
+            task_id=self.tasks_names.DELETE_STACK_TASK_ID,
+            params={'StackName': self.stack_name},
             dag=self.dag
         )
 
         delete_stack_sensor = CloudFormationDeleteStackSensor(
-            task_id=f'cloudformation_watch_{dynamic_stack_name}_delete',
-            stack_name=dynamic_stack_name,
+            task_id=f'cloudformation_watch_{self.stack_name}_delete',
+            stack_name=self.stack_name,
             dag=self.dag
         )
 
         stack_delete_end_task = DummyOperator(
-            task_id=delete_end_task_id,
+            task_id=self.tasks_names.DELETE_END_TASK_ID,
             dag=self.dag
         )
 
@@ -113,54 +109,54 @@ class CloudFormationStackTask(stack.StackTask):
 
         return stack_delete_end_task
 
-    def __reformatted_params(self, resource):
+    def __reformatted_params(self):
         params_key = 'params'
+        parameters_key = 'Parameters'
 
-        self.config[params_key]['StackName'] = dynamic_stack_name
+        reformatted_params = self.config[params_key]
 
-        parameters = self.config[params_key]['Parameters']
+        reformatted_params['StackName'] = self.stack_name
+
+        parameters = self.config[params_key][parameters_key]
 
         # overwrite or add parameters from resource if exists
-        for (p_key, p_value) in FlatDict(resource.get('Parameters', {})):
+        for p_key, p_value in FlatDict(self.resource.get(parameters_key, {})).items():
             parameters[p_key] = p_value
 
-        self.config[params_key]['Parameters'] = [{'ParameterKey': x, 'ParameterValue': y} for (x, y) in
-                                                 FlatDict(parameters).items()]
-        return self.config[params_key]
+        reformatted_params[parameters_key] = [{'ParameterKey': x, 'ParameterValue': y} for (x, y) in
+                                              FlatDict(parameters).items()]
+
+        return reformatted_params
 
     def __cloudformation_stack_running_branch(self, **kwargs):
         cloudformation = CloudFormationHook().get_conn()
         try:
-            stack_status = cloudformation.describe_stacks(StackName=dynamic_stack_name)['Stacks'][0]['StackStatus']
+            stack_status = cloudformation.describe_stacks(StackName=self.stack_name)['Stacks'][0]['StackStatus']
             if stack_status in ['CREATE_COMPLETE', 'DELETE_FAILED']:
-                print(f'Stack {dynamic_stack_name} is running')
-                return stack_creation_end_task_id
+                print(f'Stack {self.stack_name} is running')
+                return self.tasks_names.STACK_CREATION_END_TASK_ID
             else:
-                print(f'Stack {dynamic_stack_name} is not running')
+                print(f'Stack {self.stack_name} is not running')
         except Exception as e:
             if 'does not exist' in str(e):
-                print(f'Stack {dynamic_stack_name} does not exist')
-                return create_stack_task_id
+                print(f'Stack {self.stack_name} does not exist')
+                return self.tasks_names.CREATE_STACK_TASK_ID
             else:
                 raise e
 
-        return create_stack_task_id
+        return self.tasks_names.CREATE_STACK_TASK_ID
 
     def __queued_dag_runs_exists(self, **kwargs):
         if self.dag.get_num_active_runs() > 1:
-            return delete_end_task_id
+            return self.tasks_names.DELETE_END_TASK_ID
         else:
-            return delete_stack_task_id
+            return self.tasks_names.DELETE_STACK_TASK_ID
 
-    def __set_global_vars(self, resource):
-        global dynamic_stack_name, stack_creation_end_task_id, delete_end_task_id, create_stack_task_id, \
-            delete_stack_task_id
+    def __set_constant_task_names(self):
+        class TasksNames(object):
+            STACK_CREATION_END_TASK_ID = f'creation_end_{self.stack_name}'
+            DELETE_END_TASK_ID = f'delete_end_{self.stack_name}'
+            CREATE_STACK_TASK_ID = f'create_cloudformation_{self.stack_name}'
+            DELETE_STACK_TASK_ID = f'delete_cloudformation_{self.stack_name}'
 
-        resource_id = resource['resource_id']
-        # unique key for each resource belongs to this stack
-        dynamic_stack_name = f'{self.stack_name}-{resource_id}'
-
-        stack_creation_end_task_id = f'creation_end_{dynamic_stack_name}'
-        delete_end_task_id = f'delete_end_{dynamic_stack_name}'
-        create_stack_task_id = f'create_cloudformation_{dynamic_stack_name}'
-        delete_stack_task_id = f'delete_cloudformation_{dynamic_stack_name}'
+        return TasksNames()
