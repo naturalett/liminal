@@ -19,12 +19,14 @@
 import unittest
 from unittest import TestCase
 
+from airflow.operators.dummy_operator import DummyOperator
+from airflow.operators.python_operator import BranchPythonOperator
 from airflow.utils import timezone
 from jsonpickle import json
 from mock import MagicMock, patch
 
 from rainbow.runners.airflow.operators.cloudformation import CloudFormationCreateStackOperator, \
-    CloudFormationDeleteStackOperator
+    CloudFormationDeleteStackOperator, CloudFormationDeleteStackSensor, CloudFormationCreateStackSensor
 from rainbow.runners.airflow.tasks.stacks import stack_factory
 from tests.util import dag_test_utils
 
@@ -40,7 +42,8 @@ class TestCloudFormationStackTask(TestCase):
         self.task_id = 'my-task'
         self.config = self.__create_conf(self.task_id)
         self.dag = dag_test_utils.create_dag()
-
+        self.task_dict = self.dag.task_dict
+        
         # Set up Mock
 
         # Mock out the cloudformation_client (moto fails with an exception).
@@ -57,26 +60,29 @@ class TestCloudFormationStackTask(TestCase):
     def test_apply_task_to_dag_create(self):
         stack_factory.create_stacks(dag=self.dag, pipeline=self.config, parent=None)
 
-        self.__test_create_stack_operator(self.dag.tasks[4])
+        self.__test_create_stacks_flow()
 
-    def test_apply_task_to_dag_delete(self):
-        stack_factory.delete_stacks(dag=self.dag, pipeline=self.config, parent=None)
+        self.__test_create_stack_operator(self.task_dict['create_cloudformation_mycluster-20'])
 
-        self.assertEqual(self.dag.tasks[0].task_id, 'start_delete_all_stacks')
-        self.assertEqual(self.dag.tasks[1].task_id, 'end_delete_all_stacks')
-        self.assertEqual(self.dag.tasks[2].task_id, 'start_delete_my-task-1_stack')
-        self.assertEqual(self.dag.tasks[3].task_id, 'mycluster-20_is_dag_queue_empty')
+    def __test_create_stacks_flow(self):
+        start_create_stack_task = self.task_dict['start_create_my-task-1_stack']
+        create_cloudformation_stack_task = self.task_dict['create_cloudformation_mycluster-20']
+        is_cloudformation_running_task = self.task_dict['is_cloudformation_mycluster-20_running']
+        cloudformation_create_sensor_task = self.task_dict['cloudformation_watch_mycluster-20_create']
+        creation_end_stack_task = self.task_dict['creation_end_mycluster-20']
 
-        self.__test_delete_stack_operator(self.dag.tasks[4])
+        self.assertIsInstance(start_create_stack_task, DummyOperator)
+        self.assertListEqual(start_create_stack_task.downstream_list, [is_cloudformation_running_task])
 
-    def __test_delete_stack_operator(self, task):
-        self.assertIsInstance(task, CloudFormationDeleteStackOperator)
-        self.assertEqual(task.task_id, 'delete_cloudformation_mycluster-20')
+        self.assertIsInstance(is_cloudformation_running_task, BranchPythonOperator)
+        is_cloudformation_running_task_downstream_lst = is_cloudformation_running_task.downstream_list
+        is_cloudformation_running_task_downstream_lst.sort()
+        self.assertEqual(is_cloudformation_running_task_downstream_lst[0], create_cloudformation_stack_task)
+        self.assertEqual(is_cloudformation_running_task_downstream_lst[1], creation_end_stack_task)
 
-        with patch('boto3.session.Session', self.boto3_session_mock):
-            task.execute(self.mock_context)
+        self.assertListEqual(create_cloudformation_stack_task.downstream_list, [cloudformation_create_sensor_task])
 
-        self.cloudformation_client_mock.delete_stack.assert_any_call(StackName='mycluster-20')
+        self.assertIsInstance(cloudformation_create_sensor_task, CloudFormationCreateStackSensor)
 
     def __test_create_stack_operator(self, task):
         self.assertIsInstance(task, CloudFormationCreateStackOperator)
@@ -95,6 +101,49 @@ class TestCloudFormationStackTask(TestCase):
                         {'ParameterKey': 'myParam2', 'ParameterValue': 'myParam2'},
                         {'ParameterKey': 'myParam3', 'ParameterValue': '3'}],
             StackName='mycluster-20')
+
+    def test_apply_task_to_dag_delete(self):
+        stack_factory.delete_stacks(dag=self.dag, pipeline=self.config, parent=None)
+
+        self.__test_delete_tasks_flow()
+
+        self.__test_delete_stack_operator(self.task_dict['delete_cloudformation_mycluster-20'])
+
+    def __test_delete_tasks_flow(self):
+        start_delete_all_stack_task = self.task_dict['start_delete_all_stacks']
+        start_delete_stack_task = self.task_dict['start_delete_my-task-1_stack']
+        is_queue_empty_task = self.task_dict['mycluster-20_is_dag_queue_empty']
+        end_delete_stack_task = self.task_dict['delete_end_mycluster-20']
+        delete_cloudformation_stack_task = self.task_dict['delete_cloudformation_mycluster-20']
+        cloudformation_watch_task = self.task_dict['cloudformation_watch_mycluster-20_delete']
+
+        self.assertIsInstance(start_delete_stack_task, DummyOperator)
+        self.assertListEqual(start_delete_all_stack_task.downstream_list, [start_delete_stack_task])
+
+        self.assertIsInstance(start_delete_stack_task, DummyOperator)
+        self.assertListEqual(start_delete_stack_task.downstream_list, [is_queue_empty_task])
+
+        self.assertIsInstance(is_queue_empty_task, BranchPythonOperator)
+
+        self.assertEqual(len(is_queue_empty_task.downstream_list), 2)
+
+        actual_is_queue_empty_downstream_lst = is_queue_empty_task.downstream_list
+        actual_is_queue_empty_downstream_lst.sort()
+        self.assertEqual(actual_is_queue_empty_downstream_lst[0], delete_cloudformation_stack_task)
+        self.assertEqual(actual_is_queue_empty_downstream_lst[1], end_delete_stack_task)
+
+        self.assertListEqual(delete_cloudformation_stack_task.downstream_list, [cloudformation_watch_task])
+
+        self.assertIsInstance(cloudformation_watch_task, CloudFormationDeleteStackSensor)
+        self.assertListEqual(cloudformation_watch_task.downstream_list, [end_delete_stack_task])
+
+    def __test_delete_stack_operator(self, task):
+        self.assertIsInstance(task, CloudFormationDeleteStackOperator)
+
+        with patch('boto3.session.Session', self.boto3_session_mock):
+            task.execute(self.mock_context)
+
+        self.cloudformation_client_mock.delete_stack.assert_any_call(StackName='mycluster-20')
 
     @staticmethod
     def __create_conf(task_id) -> dict:
