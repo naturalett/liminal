@@ -42,7 +42,7 @@ rsync -a --exclude 'venv' $(PWD)/ $docker_build_dir/zip_content/
 # perform installation of external pacakges (framework-requirements and user-requirements)
 # this is done inside a docker to 1) avoid requiring the user to install stuff, and 2) to create a platform-compatible
 # package (install the native libraries in a flavour suitable for the docker in which airflow runs, and not user machine)
-liminal_version=$(pip freeze | grep "liminal")
+liminal_version=$(pip freeze | grep "liminal") 
 docker run --rm --name liminal_build -v /private/"$docker_build_dir":/home/liminal/tmp --entrypoint="" -u 0 \
        puckel/docker-airflow:1.10.9 /bin/bash -c "cd /home/liminal/tmp/zip_content &&
        pip install --no-deps --target=\"/home/liminal/tmp/zip_content\" $liminal_version &&
