@@ -3,7 +3,7 @@ import json
 from airflow.contrib.operators.kubernetes_pod_operator import KubernetesPodOperator
 
 
-def split_list(seq, num):
+def _split_list(seq, num):
     avg = len(seq) / float(num)
     out = []
     last = 0.0
@@ -11,6 +11,11 @@ def split_list(seq, num):
     while last < len(seq):
         out.append(seq[int(last):int(last + avg)])
         last += avg
+
+    while len(out) > num:
+        if [] not in out:
+            break
+        out.remove([])
 
     return out
 
@@ -70,7 +75,7 @@ class PrepareInputOperator(KubernetesPodOperator):
             self.log.info(f'Generated input: {input_dict}')
 
             if self.split_input:
-                input_splits = split_list(input_dict, self.executors)
+                input_splits = _split_list(input_dict, self.executors)
                 numbered_splits = list(
                     zip(range(len(input_splits)), input_splits)
                 )
