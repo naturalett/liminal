@@ -27,13 +27,9 @@ class PrepareInputOperator(KubernetesPodOperator):
                  executors=1,
                  *args,
                  **kwargs):
-        namespace = kwargs['namespace']
-        image = kwargs['image']
-        name = kwargs['name']
-
-        del kwargs['namespace']
-        del kwargs['image']
-        del kwargs['name']
+        namespace = kwargs.pop('namespace')
+        image = kwargs.pop('image')
+        name = kwargs.pop('name')
 
         super().__init__(
             namespace=namespace,
@@ -75,6 +71,10 @@ class PrepareInputOperator(KubernetesPodOperator):
 
             if self.split_input:
                 input_splits = split_list(input_dict, self.executors)
+                numbered_splits = list(
+                    zip(range(len(input_splits)), input_splits)
+                )
+                self.log.info(numbered_splits)
 
                 ti.xcom_push(key=_IS_SPLIT_KEY, value=True)
 
@@ -100,13 +100,9 @@ class KubernetesPodOperatorWithInputAndOutput(KubernetesPodOperator):
                  input_task_id=None,
                  *args,
                  **kwargs):
-        namespace = kwargs['namespace']
-        image = kwargs['image']
-        name = kwargs['name']
-
-        del kwargs['namespace']
-        del kwargs['image']
-        del kwargs['name']
+        namespace = kwargs.pop('namespace')
+        image = kwargs.pop('image')
+        name = kwargs.pop('name')
 
         super().__init__(
             namespace=namespace,
